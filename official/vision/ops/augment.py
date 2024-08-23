@@ -2370,7 +2370,8 @@ class RandAugment(ImageAugment):
                translate_const: float = 100.,
                magnitude_std: float = 0.0,
                prob_to_apply: Optional[float] = None,
-               exclude_ops: Optional[List[str]] = None):
+               exclude_ops: Optional[List[str]] = None,
+               seed: Optional[float] = None):
     """Applies the RandAugment policy to images.
 
     Args:
@@ -2389,11 +2390,12 @@ class RandAugment(ImageAugment):
       exclude_ops: exclude selected operations.
     """
     super(RandAugment, self).__init__()
-
+    tf.random.set_seed(seed)
     self.num_layers = num_layers
     self.magnitude = float(magnitude)
     self.cutout_const = float(cutout_const)
     self.translate_const = float(translate_const)
+    self.seed = seed
     self.prob_to_apply = (
         float(prob_to_apply) if prob_to_apply is not None else None)
     self.available_ops = [
@@ -2459,14 +2461,16 @@ class RandAugment(ImageAugment):
     for _ in range(self.num_layers):
       op_to_select = tf.random.uniform([],
                                        maxval=len(self.available_ops) + 1,
-                                       dtype=tf.int32)
+                                       dtype=tf.int32,
+                                       seed=self.seed)
 
       branch_fns = []
       for (i, op_name) in enumerate(self.available_ops):
         prob = tf.random.uniform([],
                                  minval=min_prob,
                                  maxval=max_prob,
-                                 dtype=tf.float32)
+                                 dtype=tf.float32,
+                                 seed=self.seed)
         func, _, args = _parse_policy_info(op_name, prob, self.magnitude,
                                            replace_value, self.cutout_const,
                                            self.translate_const,
@@ -2485,7 +2489,7 @@ class RandAugment(ImageAugment):
 
       if self.prob_to_apply is not None:
         aug_image, aug_bboxes = tf.cond(
-            tf.random.uniform(shape=[], dtype=tf.float32) < self.prob_to_apply,
+            tf.random.uniform(shape=[], dtype=tf.float32, seed=self.seed) < self.prob_to_apply,
             lambda: (tf.identity(aug_image), _maybe_identity(aug_bboxes)),
             lambda: (tf.identity(image), _maybe_identity(bboxes)))
       image = aug_image
